@@ -1,4 +1,4 @@
-# AGT → Hermes 8045 Reliability Kit
+# Antigravity Tools 与 Hermes 可靠性修复：令牌刷新超时、失败换号与限流重试
 
 这是**源码补丁与配置辅助包**，不是 AGT 安装器，也不是已部署的 Mac 服务。三层组件可独立使用：
 
