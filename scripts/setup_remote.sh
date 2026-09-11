@@ -1,56 +1,18 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# setup_remote.sh - Remote / Headless Linux Setup Guide & Automation
-# ==============================================================================
+# Safe preflight; --apply only runs local patch/test helpers, never installs or starts services.
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-echo "=== AGT -> Hermes 8045 Reliability Kit (Remote/Linux Setup) ==="
-echo "Repository Root: ${REPO_ROOT}"
-
-# 1. Environment and Tool Validation
-echo ""
-echo "[Step 1/4] Verifying required build tools..."
-for tool in git python3 cargo; do
-    if ! command -v "$tool" &>/dev/null; then
-        echo "[-] Missing dependency: $tool. Please install before proceeding."
-        exit 1
-    fi
-done
-echo "[+] Build toolchain verified."
-
-# 2. Upstream AGT Source Path
-AGT_SRC="${AGT_SRC_DIR:-${1:-}}"
-if [ -z "${AGT_SRC}" ]; then
-    echo "Usage: $0 /path/to/Antigravity-Manager-source"
-    echo "Or export AGT_SRC_DIR=/path/to/Antigravity-Manager-source"
-    exit 1
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APPLY=0; SRC="${AGT_SRC_DIR:-${1:-}}"
+for arg in "$@"; do [[ "$arg" == "--apply" ]] && APPLY=1 || [[ "$arg" == /* ]] && SRC="$arg"; done
+for tool in python3; do command -v "$tool" >/dev/null || { echo "缺少 $tool；仅预检失败，不改文件。" >&2; exit 1; }; done
+[[ -n "$SRC" && -d "$SRC" ]] || { echo "用法: $0 [--apply] /path/to/existing-AGT-source" >&2; exit 2; }
+CFG="${AGT_CONFIG_PATH:-${HOME}/.antigravity_tools/gui_config.json}"
+[[ -f "$CFG" ]] || { echo "需要已有完整配置: $CFG；不会创建模板。" >&2; exit 2; }
+echo "预检通过：已有源代码与配置；不会安装依赖、修改运行服务或执行 OAuth。"
+if (( APPLY )); then
+  python3 "$ROOT/scripts/apply_agt_patch.py" "$SRC"
+  python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG"
+  echo "完成本地补丁/配置；请按项目文档手工构建、启动服务并完成 OAuth。"
+else
+  echo "仅预检。真正首次安装/构建、启动服务与 OAuth 登录须由操作者明确手工执行；使用 --apply 才修改候选源/已有配置。"
 fi
-
-if [ ! -d "${AGT_SRC}" ]; then
-    echo "[ERROR] Directory does not exist: ${AGT_SRC}"
-    exit 1
-fi
-
-# 3. Apply AGT Source Patch & Run Harness
-echo ""
-echo "[Step 2/4] Applying AGT 4.6.7 reliability patch to: ${AGT_SRC}"
-python3 "${REPO_ROOT}/scripts/apply_agt_patch.py" "${AGT_SRC}"
-
-echo "[Step 3/4] Running Rust unit test harness..."
-cargo test --manifest-path "${REPO_ROOT}/patches/agt-4.6.7/harness/Cargo.toml"
-
-# 4. Apply Configuration Mitigation
-echo ""
-echo "[Step 4/4] Applying background refresh interval mitigation..."
-python3 "${REPO_ROOT}/configs/agt/apply_refresh_interval.py"
-
-echo ""
-echo "=========================================================================="
-echo "  [SUCCESS] Remote Setup Finished Cleanly!"
-echo "  Next Steps:"
-echo "  1. Build candidate: cd ${AGT_SRC} && cargo build --release"
-echo "  2. Point Hermes to http://127.0.0.1:8045/v1 using templates in configs/hermes/"
-echo "=========================================================================="

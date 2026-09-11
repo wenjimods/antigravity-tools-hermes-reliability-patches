@@ -1,0 +1,19 @@
+{
+  "baseline": "4a39a3ff8bea45ab5a6b646ce26ced88a8fed079",
+  "files": {
+    "agent/error_classifier.py": {
+      "before": "1479dc512a1fec285596dc7fc5e86860f3e2c3524d70e03385ef9bb3b01fc48c",
+      "after": "736742255cab93d389385dfea94153bedb71fc22028097b3c2e64ad70795448f"
+    },
+    "agent/retry_utils.py": {
+      "before": "1682967734b3c6e68ea1f0fef91da81508c5e5c7a67659ac64dbaec0b4bf9bc9",
+      "after": "c5676a7eaf68f645f1cfe5537912c8176c5147432169afa447e5e0e094f24064"
+    },
+    "agent/turn_recovery.py": {
+      "before": "43aae3d9e0e0cf8b2f9d2321590f5e3570f820365a32ca3388c66ec3de8c74f7",
+      "after": "99850d3cd55b2a35a8711a459a80dbe96d491b490d4a9f58425c238e5a6cdcac"
+    }
+  },
+  "patch": "hermes-all-accounts-limited-retry.patch",
+  "patch_sha256": "466088158db7b8d4c925ad10faa1ad10e941ef10a86e291d1e621f0fd8677c2e"
+}

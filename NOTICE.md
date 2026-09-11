@@ -1,27 +1,46 @@
 # Notice and Attribution
 
-## Upstream Project
-- **Project**: Antigravity Manager (AGT)
-- **Upstream Author / Repository**: `lbjlaq/Antigravity-Manager`
-- **Baseline Version**: v4.6.7 (commit `4987bfb` / release 4.6.7)
-- **License**: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC-BY-NC-SA 4.0)
+## Antigravity Manager
 
-## Modifications and Additions in this Reliability Kit
-This repository (`agt-hermes-reliability-kit`) contains patches, configurations, and integration utilities designed to improve the reliability of the AGT (port 8045) proxy bridge with Hermes agents.
+- Upstream: https://github.com/lbjlaq/Antigravity-Manager
+- Author: lbjlaq and contributors.
+- Baseline: v4.6.7, commit prefix `4987bfb`; exact supported file hashes are recorded beside the patch.
+- License: CC-BY-NC-SA 4.0; complete upstream license retained in `LICENSE`.
+- This kit is an unofficial modification, not an upstream release or endorsement.
 
-Key modifications:
-1. **AGT 4.6.7 Source Patch (`patches/agt-4.6.7/`)**:
-   - Replaces the monolithic 5-second timeout in `get_token_filtered` with an acquisition budget guard of 40s.
-   - Introduces `refresh_budget.rs` with per-account lock timeout (1s) and independent OAuth refresh budget (15s).
-   - Re-reads token state inside the mutex (double-checked locking) to prevent redundant concurrent refreshes.
-   - Updates in-memory token state immediately upon successful refresh before asynchronous background persistence, ensuring newer tokens are not overwritten by stale disk writes.
-   - Excludes failing accounts and falls back to subsequent candidates without marking transient network timeouts as `invalid_grant`.
+AGT changes replace the 5-second acquisition guard with a 40-second overall budget, use a 1-second per-account lock budget and a 15-second OAuth budget, reread token state after locking, and allow preferred/main selection to move away from refresh failures. The configuration helper separately reduces the background refresh interval to 2 minutes. These changes do not eliminate quota exhaustion, regional restrictions, upstream outages, or every HTTP 503.
 
-2. **Configuration Mitigation (`configs/agt/`)**:
-   - Adjusts background token refresh interval from 15 minutes to 2 minutes (`refresh_interval: 2`) as a proactive background mitigation.
+## Hermes Agent
 
-3. **Hermes Client Retry Patch (`patches/hermes/`)**:
-   - Detects upstream AGT "All accounts limited. Wait Ns." errors as `upstream_rate_limit`.
-   - Parses the wait duration `N` and executes a backoff wait of `N + 1` seconds before retrying.
+- Upstream: https://github.com/NousResearch/hermes-agent
+- Copyright (c) 2025 Nous Research.
+- License: MIT; the notice below applies to upstream Hermes code included in patches and fixtures. The kit's root CC license does not remove the upstream MIT grant.
+- The client patch handles `All accounts limited. Wait Ns` as upstream rate limiting and waits `N + 1` before a bounded retry. It does not fix AGT OAuth refresh itself.
 
-All modifications are distributed under the terms of the CC-BY-NC-SA 4.0 license in accordance with upstream licensing requirements.
+### Hermes MIT notice
+
+MIT License
+
+Copyright (c) 2025 Nous Research
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Distribution boundary
+
+Original kit additions retain the root CC-BY-NC-SA 4.0 license. Third-party notices remain applicable to their respective material. No account database, credentials, private logs, installed executable or production configuration is part of this kit. Commercial use of AGT-derived material requires checking the upstream noncommercial restriction; this kit is not a grant of commercial permission.

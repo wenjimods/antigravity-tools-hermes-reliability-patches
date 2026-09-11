@@ -1,16 +1,7 @@
-# Hermes 8045 本地代理配置模板
+# Hermes 本地 AGT 接入
 
-## 概述
-本目录提供用于连接本地/远程 Antigravity-Manager (8045 端口) 的 Hermes 客户端配置模板。
+运行 `hermes model`，选择自定义 OpenAI-compatible provider，地址填写 `http://127.0.0.1:8045/v1`，模型名称从目标 AGT 的模型列表选择，按提示在目标机私下输入 Key。用 `hermes config path` 确认当前 profile。
 
-## 敏感信息管理原则
-- **禁止硬编码任何明文 Key**。
-- API Key 及管理凭据必须仅通过环境变量（如 `OPENAI_API_KEY`）或安全交互输入注入。
+`config.template.yaml` 仅说明可合并的 model 字段，不是完整配置。不要覆盖现有 config.yaml 或 .env，不假设 `${VAR}` 会自动展开。`env.template` 仅为提醒，不提供自动注入方案。
 
-## 配置步骤
-1. 复制 `env.template` 为你的私有环境变量文件（如 `~/.hermes/.env`）：
-   ```bash
-   cp configs/hermes/env.template ~/.hermes/.env
-   ```
-2. 编辑填入从 AGT 生成的 Proxy API Key。
-3. 复制 `config.template.yaml` 至 `~/.hermes/config.yaml`。
+首次真实请求和流式调用必须在目标机另行验收，本工具包离线测试不代表接入成功。
