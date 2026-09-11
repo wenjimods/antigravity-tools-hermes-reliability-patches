@@ -117,6 +117,7 @@ pub struct ProxyToken {
     pub account_id: String,
     pub access_token: String,
     pub refresh_token: String,
+    pub oauth_client_key: Option<String>,
     pub expires_in: i64,
     pub timestamp: i64,
     pub email: String,
@@ -162,6 +163,13 @@ pub struct TokenManager {
     auto_cleanup_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
     cancel_token: CancellationToken,
     image_scheduler: std::sync::RwLock<Option<Weak<ImageScheduler>>>,
+}
+
+fn normalize_refreshed_oauth_client_key(current: &ProxyToken, refreshed: Option<String>) -> Option<String> {
+    let resolved = refreshed.or_else(|| current.oauth_client_key.clone());
+    let project_missing = current.project_id.as_deref().map(str::trim).map(|v| v.is_empty()).unwrap_or(true);
+    if current.oauth_client_key.is_none() && project_missing && resolved.as_deref() == Some("antigravity_enterprise") { return None; }
+    resolved
 }
 
 impl TokenManager {
@@ -730,6 +738,7 @@ impl TokenManager {
             account_id,
             access_token,
             refresh_token,
+            oauth_client_key,
             expires_in,
             timestamp,
             email,
@@ -1490,9 +1499,10 @@ impl TokenManager {
             if chrono::Utc::now().timestamp() < token.timestamp - buffer {
                 return Ok(());
             }
-            let response = crate::modules::oauth::refresh_access_token(
+            let response = crate::modules::oauth::refresh_access_token_with_client(
                 &token.refresh_token,
                 Some(&token.account_id),
+                token.oauth_client_key.as_deref(),
             )
             .await?;
             if response.expires_in <= 0 {
@@ -1500,6 +1510,7 @@ impl TokenManager {
             }
             let expiry = chrono::Utc::now().timestamp() + response.expires_in;
             token.access_token = response.access_token.clone();
+            token.oauth_client_key = normalize_refreshed_oauth_client_key(token, response.oauth_client_key.clone());
             token.expires_in = response.expires_in;
             token.timestamp = expiry;
             if let Some(ref rt) = response.refresh_token {
@@ -1510,6 +1521,7 @@ impl TokenManager {
                 entry.expires_in = token.expires_in;
                 entry.timestamp = expiry;
                 entry.refresh_token = token.refresh_token.clone();
+                entry.oauth_client_key = token.oauth_client_key.clone();
             } else {
                 return Err("Account removed during token refresh".into());
             }
@@ -4446,6 +4458,7 @@ mod tests {
             account_id: email.to_string(),
             access_token: "test_token".to_string(),
             refresh_token: "test_refresh".to_string(),
+            oauth_client_key: None,
             expires_in: 3600,
             timestamp: chrono::Utc::now().timestamp() + 3600,
             email: email.to_string(),
@@ -4790,6 +4803,7 @@ mod tests {
             account_id: email.to_string(),
             access_token: "test_token".to_string(),
             refresh_token: "test_refresh".to_string(),
+            oauth_client_key: None,
             expires_in: 3600,
             timestamp: chrono::Utc::now().timestamp() + 3600,
             email: email.to_string(),

@@ -721,7 +721,7 @@ fn rebuild_index_from_accounts_in_dir(data_dir: &PathBuf) -> Result<AccountIndex
 }
 
 /// Load account from a specific path with self-healing support for trailing characters/corrupted suffixes
-pub(crate) fn load_account_at_path(account_path: &PathBuf) -> Result<Account, String> {
+fn load_account_at_path(account_path: &PathBuf) -> Result<Account, String> {
     let content = fs::read_to_string(account_path)
         .map_err(|e| format!("failed_to_read_account_data: {}", e))?;
 
@@ -884,7 +884,7 @@ pub fn load_account(account_id: &str) -> Result<Account, String> {
 }
 
 /// Save account data at specific file path (thread-safe and atomic)
-pub(crate) fn save_account_at_path(account_path: &PathBuf, account: &Account) -> Result<(), String> {
+fn save_account_at_path(account_path: &PathBuf, account: &Account) -> Result<(), String> {
     let _lock = get_account_lock(&account.id);
     let _guard = _lock.lock().unwrap();
 
