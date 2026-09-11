@@ -1,0 +1,14 @@
+{
+  "upstream": "https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/85fb4fe688997d3a0c2930b7a202cf22f617b092/src-tauri/src/modules/oauth.rs",
+  "source_commit": "85fb4fe688997d3a0c2930b7a202cf22f617b092",
+  "source_sha256": "21385936b607a5a696da6f8dd7b48bce8220919038939263bff43bbc61fe41da",
+  "fixture_sha256": "380cb59d6ef38b09811437377572339667a88f1a32105acf64210b21169c8435",
+  "retrieved_via": "GitHub raw source; official repository",
+  "redactions": [
+    "CLIENT_SECRET literal replaced with <REDACTED_OFFICIAL_SOURCE_SECRET> to avoid storing credentials"
+  ],
+  "scope": "oauth.rs control-flow evidence only; not a runnable standalone OAuth module",
+  "token_model_source": "https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/85fb4fe688997d3a0c2930b7a202cf22f617b092/src-tauri/src/models/token.rs",
+  "token_model_lf_sha256": "179ef2b50770fed4db60df5223439251ebdb2b6beaf3a01a07c1d7bf70b0f150",
+  "fixture_lf_sha256": "2d7809a9e1e34caca35f3db433a8d420d1cdca5ec21945cbf5814b0c4cd4c192"
+}

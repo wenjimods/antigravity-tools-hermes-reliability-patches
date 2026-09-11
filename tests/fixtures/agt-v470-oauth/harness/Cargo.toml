@@ -1,0 +1,8 @@
+[package]
+name = "oauth-budget-harness"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+tokio = { version = "1.49.0", features = ["macros", "rt", "time", "test-util", "sync", "net", "io-util"] }
