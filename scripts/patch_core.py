@@ -40,12 +40,18 @@ def _manifest(assets):
     for name, expected in evidence.items():
         # Evidence is a read-only gate and can never be a patch target.
         if name in manifest["files"]: raise ValueError("evidence file is also a patch target")
-        path = _safe(Path(__file__).resolve().parents[1], name)
-        if not path.is_file() or digest(path.read_bytes()) != expected:
-            raise ValueError(f"evidence integrity mismatch: {name}")
+        if not isinstance(expected, str) or len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+            raise ValueError("invalid evidence hash")
     patch = assets / manifest["patch"]
     if digest(patch.read_bytes()) != manifest["patch_sha256"]: raise ValueError("patch integrity mismatch")
     return manifest, patch
+
+
+def _check_evidence(root, manifest):
+    for name, expected in manifest.get("evidence_files", {}).items():
+        path = _safe(root, name)
+        if not path.is_file() or digest(path.read_bytes()) != expected:
+            raise ValueError(f"evidence integrity mismatch: {name}")
 
 
 def _state(root, manifest):
@@ -102,12 +108,13 @@ def _write(root, payload, originals):
 
 def apply(root, group="agt-4.7.0", dry_run=False, version=None):
     group = f"agt-{version}" if version else group
-    assets = _assets(group); manifest, patch = _manifest(assets); root = Path(root).resolve(); before = _state(root, manifest)
+    assets = _assets(group); manifest, patch = _manifest(assets); root = Path(root).resolve(); _check_evidence(root, manifest); before = _state(root, manifest)
     if _expected(before, manifest, "after"): print("Already applied: exact complete state"); return True
     if not _expected(before, manifest, "before"): print("ERROR: unknown/partial/modified target; no writes"); return False
     payload = _build(root, manifest, patch)
     if dry_run: print("Dry-run PASS: input, patch, output hashes verified; no writes"); return True
     if _state(root, manifest) != before: print("ERROR: target changed during validation; no writes"); return False
+    _check_evidence(root, manifest)
     originals = {name: (_safe(root, name).read_bytes() if _safe(root, name).is_file() else None) for name in payload}
     _write(root, payload, originals)
     if not _expected(_state(root, manifest), manifest, "after"): raise RuntimeError("post-write hash verification failed")
@@ -116,12 +123,13 @@ def apply(root, group="agt-4.7.0", dry_run=False, version=None):
 
 def rollback(root, version="4.7.0", dry_run=False):
     group = version if version == "hermes" else f"agt-{version}"
-    assets = _assets(group); manifest, patch = _manifest(assets); root = Path(root).resolve(); after = _state(root, manifest)
+    assets = _assets(group); manifest, patch = _manifest(assets); root = Path(root).resolve(); _check_evidence(root, manifest); after = _state(root, manifest)
     if _expected(after, manifest, "before"): print("Already rolled back: exact before state"); return True
     if not _expected(after, manifest, "after"): print("ERROR: rollback requires exact after state; no writes"); return False
     payload = _build(root, manifest, patch, reverse=True)
     if dry_run: print("Rollback dry-run PASS: input, patch, output hashes verified; no writes"); return True
     if _state(root, manifest) != after: print("ERROR: target changed during validation; no writes"); return False
+    _check_evidence(root, manifest)
     originals = {name: _safe(root, name).read_bytes() for name in manifest["files"]}
     _write(root, payload, originals)
     if not _expected(_state(root, manifest), manifest, "before"): raise RuntimeError("post-rollback hash verification failed")

@@ -74,7 +74,7 @@ def main():
     before = tracked_state()
     try:
         scan()
-        run([sys.executable, '-m', 'pytest', '-q', 'tests'])
+        run([sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', 'tests'])
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'])
         from platform_tools import candidate_bash_paths
         candidates = candidate_bash_paths()

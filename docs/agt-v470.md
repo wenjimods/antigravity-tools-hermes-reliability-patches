@@ -2,9 +2,13 @@
 
 固定官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`。baseline 仅包含官方真实存在的相关文件；`src-tauri/src/proxy/refresh_budget.rs` 在官方不存在，manifest 的 before 为 null，patch 使用 `/dev/null` 新增语义。rollback 必须删除该新增文件。仓库补丁根目录的 `refresh_budget.rs` 是同源测试 helper，不属于官方 baseline，保留供 harness 使用。
 
+只读 evidence_files 锁定官方 oauth.rs 的 LF SHA256，检查目标源码目录，不要求 Git HEAD 或 .git。evidence 不参与写入，缺失或变化时 apply/rollback（含重复操作）均拒绝。baseline 中的 oauth.rs 是未经脱敏的官方公开源码，用于精确比对；其中内置公开 OAuth client 常量不是本机账号凭据。
+
+ProxyToken 从账号 JSON 加载 oauth_client_key，优先用保存的 client；刷新后按上游 legacy 规则归一化，同步内存、DashMap 和 JSON。无 project_id 且原 key 未设置的 legacy 账号不会因 enterprise 刷新被锁为 enterprise。
+
 保持 40s acquisition、1s lock、15s 单账号完整 OAuth fallback 链 deadline；15s 并非单次 HTTP timeout，也不是已证明最优参数。上游请求配置及二次确认共享 deadline 的分层证据见 docs/oauth-budget.md；最终参数待真实 E2E/慢网络数据决定。
 
-持久化使用 serde_json::Value，仅修改五个 token 字段，不再进行 typed `Account` 往返，保留未知顶层及 token 字段。窄接口 `atomic_write_account_json` 复用官方每账号锁、UUID 临时文件、Windows MoveFileExW(REPLACE_EXISTING|WRITE_THROUGH) / 非 Windows rename；失败清理临时文件。保留 caller 全局锁，顺序为全局锁→每账号锁，与上游管理路径一致；不宣称全局并发串行化或所有 account writer 已统一。后台最多三次有界重试，warning 不输出凭据。
+持久化使用 serde_json::Value，仅修改 access_token、refresh_token、expires_in、expiry_timestamp、id_token 及 oauth_client_key，不再进行 typed `Account` 往返，保留未知顶层及 token 字段。窄接口 `atomic_write_account_json` 复用官方每账号锁、UUID 临时文件、Windows MoveFileExW(REPLACE_EXISTING|WRITE_THROUGH) / 非 Windows rename；失败清理临时文件。保留 caller 全局锁，顺序为全局锁→每账号锁，与上游管理路径一致；不宣称全局并发串行化或所有 account writer 已统一。后台最多三次有界重试，warning 不输出凭据。
 
 本地回归执行真实提取的 JSON 修改块及 atomic helper：模拟账号数据的未知字段保留、rotation 字段更新；Windows 原生文件共享锁阻止替换时，旧文件字节保留且临时文件清理。非 Windows 故障路径仍需当地验证。补丁测试覆盖 dry-run/apply/重复操作/rollback 删除新增文件及 unknown/partial 拒绝，不降低 exact hash 检查。
 

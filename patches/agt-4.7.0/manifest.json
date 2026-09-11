@@ -9,7 +9,7 @@
     },
     "src-tauri/src/proxy/token_manager.rs": {
       "before": "40c1e4607027b7da9085e233de28c5a3338ff416736ac31e7d20d8dea393780a",
-      "after": "fe17e18c57e501986f0b43ffdd2a550d754f328fa6740e859d34ca0ade65d42e"
+      "after": "fd0ecc7ba10fa2551c0da4cee799e9cc88a7d8f58ed0c740b046d0574e287bf6"
     },
     "src-tauri/src/proxy/mod.rs": {
       "before": "ae0b73c9a66a739425a4746e180831bb702c6767a038a0f8af4e5e073fe0d52e",
@@ -21,5 +21,8 @@
     }
   },
   "patch": "agt-v470.patch",
-  "patch_sha256": "27c04cef37f7dd441fcb7cc0abbbd40d1df3c679c81c0778a58f05afe268bb8f"
+  "patch_sha256": "51dc915650599a4ea4dc487f3c19bcb93e739fa615c01633bf399bba878f5e4c",
+  "evidence_files": {
+    "src-tauri/src/modules/oauth.rs": "21385936b607a5a696da6f8dd7b48bce8220919038939263bff43bbc61fe41da"
+  }
 }

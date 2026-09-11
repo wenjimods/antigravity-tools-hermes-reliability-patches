@@ -6,9 +6,9 @@
 
 | 组件 | 版本与状态 |
 |---|---|
-| AGT 4.7.0 | 独立候选补丁；官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`；真实基线 apply / dry-run / repeat / rollback 与同源 Rust helper 测试 |
+| AGT 4.7.0 | 独立候选补丁；官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`；已验证基线 apply / dry-run / repeat / rollback 与同源 Rust helper 测试 |
 | AGT 4.6.7 | 原有补丁保留，必须显式选择对应版本 |
-| 当前官方 Hermes | 以 commit `5d2d5e906d62e326e600855277403b8595325b38` 验证原生 Retry-After；默认不打 Hermes 补丁 |
+| 已验证 Hermes 基线 | 以 commit `5d2d5e906d62e326e600855277403b8595325b38` 验证原生 Retry-After；默认不打 Hermes 补丁 |
 | 旧 Hermes 补丁 | legacy compatibility，仅适用于其精确基线及缺少标准 header 的旧环境 |
 
 AGT 改动：40 秒总预算、1 秒账号锁、15 秒刷新预算、锁后重读、preferred/main 失败换号；保留 v4.7 的 invalid_grant 两次确认。持久化失败记录不含凭据的 warning，并有界重试。**不保证消除所有503；未完成完整 AGT 编译或 rotation 重启真机验证。**

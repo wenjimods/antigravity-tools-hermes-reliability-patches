@@ -48,7 +48,16 @@
  }
  
  impl TokenManager {
-@@ -730,6 +738,7 @@
+@@ -596,6 +604,8 @@
+             .ok_or("缺少 refresh_token")?
+             .to_string();
+ 
++        let oauth_client_key = token_obj.get("oauth_client_key").and_then(|v| v.as_str()).map(str::to_owned);
++
+         let expires_in = token_obj["expires_in"].as_i64().ok_or("缺少 expires_in")?;
+ 
+         let timestamp = token_obj["expiry_timestamp"]
+@@ -730,6 +740,7 @@
              account_id,
              access_token,
              refresh_token,
@@ -56,7 +65,7 @@
              expires_in,
              timestamp,
              email,
-@@ -1471,6 +1480,80 @@
+@@ -1471,6 +1482,85 @@
          }
      }
  
@@ -107,6 +116,7 @@
 +            }
 +            self.invalid_grant_failures.remove(&token.account_id);
 +            let write_path = token.account_path.clone();
++            let persisted_client_key = token.oauth_client_key.clone();
 +            tokio::task::spawn_blocking(move || {
 +                for attempt in 1..=3 {
 +                    let result = (|| -> Result<(), &'static str> {
@@ -119,6 +129,10 @@
 +                        let disk_expiry=token.get("expiry_timestamp").and_then(|v|v.as_i64()).unwrap_or(0); if disk_expiry>expiry{return Ok(());}
 +                        token.insert("access_token".into(),response.access_token.clone().into()); token.insert("expires_in".into(),response.expires_in.into()); token.insert("expiry_timestamp".into(),expiry.into());
 +                        if let Some(ref it)=response.id_token{token.insert("id_token".into(),it.clone().into());} if let Some(ref rt)=response.refresh_token{token.insert("refresh_token".into(),rt.clone().into());}
++                        match &persisted_client_key {
++                            Some(key) => { token.insert("oauth_client_key".into(), key.clone().into()); }
++                            None => { token.remove("oauth_client_key"); }
++                        }
 +                        crate::modules::account::atomic_write_account_json(&write_path, &value).map_err(|_| "atomic_save")
 +                    })();
 +                    match result {
@@ -137,7 +151,7 @@
      async fn get_token_filtered(
          &self,
          quota_group: &str,
-@@ -1503,7 +1586,7 @@
+@@ -1503,7 +1593,7 @@
          }
  
          // 【优化 Issue #284】添加 5 秒超时，防止死锁
@@ -146,7 +160,7 @@
          match tokio::time::timeout(
              timeout_duration,
              self.get_token_internal(
-@@ -1518,7 +1601,7 @@
+@@ -1518,7 +1608,7 @@
          {
              Ok(result) => result,
              Err(_) => Err(
@@ -155,7 +169,7 @@
              ),
          }
      }
-@@ -1659,6 +1742,8 @@
+@@ -1659,6 +1749,8 @@
              .map(|cfg| cfg.quota_protection.enabled)
              .unwrap_or(false);
  
@@ -164,7 +178,7 @@
          // ===== [FIX #820] 固定账号模式：优先使用指定账号 =====
          let preferred_id = self.preferred_account_id.read().await.clone();
          if let Some(ref pref_id) = preferred_id {
-@@ -1726,89 +1811,10 @@
+@@ -1726,89 +1818,10 @@
                              // 直接使用优先账号，跳过轮询逻辑
                              let mut token = preferred_token.clone();
  
@@ -258,7 +272,7 @@
                              }
  
                              // 确保有 project_id (filter empty strings to trigger re-fetch)
-@@ -1873,6 +1879,7 @@
+@@ -1873,6 +1886,7 @@
                  tracing::warn!("🔒 [FIX #820] Preferred account {} not found in pool, falling back to round-robin", pref_id);
              }
          }
@@ -266,7 +280,7 @@
          // ===== [END FIX #820] =====
  
          // 【优化 Issue #284】将锁操作移到循环外，避免重复获取锁
-@@ -1885,6 +1892,7 @@
+@@ -1885,6 +1899,7 @@
          };
  
          let mut attempted: HashSet<String> = HashSet::new();
@@ -274,7 +288,7 @@
          let mut last_error: Option<String> = None;
          let mut need_update_last_used: Option<(String, std::time::Instant)> = None;
  
-@@ -2181,79 +2189,10 @@
+@@ -2181,79 +2196,10 @@
                  OnDiskAccountState::Enabled => {}
              }
  
@@ -358,7 +372,7 @@
                                  let is_grant_error =
                                      e.contains("\"invalid_grant\"") || e.contains("invalid_grant");
                                  if is_grant_error {
-@@ -2272,7 +2211,7 @@
+@@ -2272,7 +2218,7 @@
                                          let _ = self
                                              .disable_account(
                                                  &token.account_id,
@@ -367,7 +381,7 @@
                                              )
                                              .await;
                                          self.invalid_grant_failures.remove(&token.account_id);
-@@ -2284,7 +2223,7 @@
+@@ -2284,7 +2230,7 @@
                                          );
                                      }
                                  }
@@ -376,7 +390,7 @@
                                  attempted.insert(token.account_id.clone());
                                  if quota_group != "image_gen"
                                      && matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
-@@ -2293,11 +2232,7 @@
+@@ -2293,11 +2239,7 @@
                                          Some((String::new(), std::time::Instant::now()));
                                  }
                                  continue;
@@ -389,7 +403,7 @@
  
              // 4. [ENHANCED] 确保有 project_id (使用锁保护 fetch 动作)
              let project_id = if let Some(pid) = &token.project_id {
-@@ -4523,6 +4458,7 @@
+@@ -4523,6 +4465,7 @@
              account_id: email.to_string(),
              access_token: "test_token".to_string(),
              refresh_token: "test_refresh".to_string(),
@@ -397,7 +411,7 @@
              expires_in: 3600,
              timestamp: chrono::Utc::now().timestamp() + 3600,
              email: email.to_string(),
-@@ -4867,6 +4803,7 @@
+@@ -4867,6 +4810,7 @@
              account_id: email.to_string(),
              access_token: "test_token".to_string(),
              refresh_token: "test_refresh".to_string(),
@@ -415,6 +429,7 @@
 +pub(crate) mod refresh_budget;
 --- /dev/null
 +++ b/src-tauri/src/proxy/refresh_budget.rs
+@@ -0,0 +1,157 @@
 +//! Independent account-refresh limits; the acquisition guard is only a final safety net.
 +use std::future::Future;
 +use std::time::Duration;

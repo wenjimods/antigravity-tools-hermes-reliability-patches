@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-本仓库以官方 Hermes commit `5d2d5e906d62e326e600855277403b8595325b38` 的精确源码副本为证据。`compute_error_backoff` 通过官方 `agent.retry_utils` 解析 `Retry-After`；有效值优先于 legacy jitter backoff，并封顶 600 秒，适用于可重试 5xx。测试启动真实本地 HTTP server：首个响应为 `503 + Retry-After: 1`，实际调用官方函数得到 1 秒，再次请求得到 200。该测试不是 SDK 独立重试，也不是生产 E2E。
+本仓库以官方 Hermes commit `5d2d5e906d62e326e600855277403b8595325b38` 的精确源码副本为已验证基线。`compute_error_backoff` 通过官方 `agent.retry_utils` 解析 `Retry-After`；有效值优先于 legacy jitter backoff，并封顶 600 秒，适用于可重试 5xx。测试启动真实本地 HTTP server：首个响应为 `503 + Retry-After: 1`，实际调用官方函数得到 1 秒，再次请求得到 200。该测试不是 SDK 独立重试，也不是生产 E2E。
 
 未提供本地 Hermes source manifest/hash 或运行时版本信息时，doctor 对版本只报告 `WARN: not verified`，不使用 hardcode `SUPPORTED` 冒充检查。
 

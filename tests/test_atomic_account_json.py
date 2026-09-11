@@ -23,17 +23,17 @@ static ACCOUNT_FILE_LOCKS: Lazy<Mutex<HashMap<String,Arc<Mutex<()>>>>> = Lazy::n
     code+='#[cfg(not(target_os="windows"))]\n'+_extract_function(account[nonwin:],'fn atomic_replace_file')+'\n'
     code+=_extract_function(account,'pub(crate) fn atomic_write_account_json')+'\n'
     code+='#[derive(Serialize,Deserialize)]\n'+response+'\n'
-    code+='fn persist(write_path:PathBuf,response:TokenResponse,expiry:i64)->Result<(), &\'static str>{\n'+block+'}\n'
+    code+='fn persist(write_path:PathBuf,response:TokenResponse,expiry:i64,persisted_client_key:Option<String>)->Result<(), &\'static str>{\n'+block+'}\n'
     code+='''
 #[test] fn preserve_unknown_and_rotate(){
  let dir=tempfile::tempdir().unwrap(); let p=dir.path().join("account.json");
  let original=serde_json::json!({"id":"account","future":{"nested":[1,2]},"token":{"future_token":"keep","access_token":"old","refresh_token":"old-r","expiry_timestamp":1}});
  fs::write(&p,original.to_string()).unwrap();
  let response:TokenResponse=serde_json::from_value(serde_json::json!({"access_token":"new","expires_in":3600,"refresh_token":"rotated","id_token":"new-id"})).unwrap();
- persist(p.clone(),response,100).unwrap();
+ persist(p.clone(),response,100,Some("B".into())).unwrap();
  let result:Value=serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
  assert_eq!(result["future"],original["future"]);assert_eq!(result["token"]["future_token"],"keep");
- assert_eq!(result["token"]["refresh_token"],"rotated");assert_eq!(result["token"]["access_token"],"new");assert_eq!(result["token"]["id_token"],"new-id");assert_eq!(result["token"]["expires_in"],3600);assert_eq!(result["token"]["expiry_timestamp"],100);
+ assert_eq!(result["token"]["oauth_client_key"],"B");assert_eq!(result["token"]["refresh_token"],"rotated");assert_eq!(result["token"]["access_token"],"new");assert_eq!(result["token"]["id_token"],"new-id");assert_eq!(result["token"]["expires_in"],3600);assert_eq!(result["token"]["expiry_timestamp"],100);
  assert_eq!(fs::read_dir(dir.path()).unwrap().count(),1);
 }
 #[cfg(target_os="windows")]

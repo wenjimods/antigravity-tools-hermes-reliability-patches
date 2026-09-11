@@ -604,6 +604,8 @@ impl TokenManager {
             .ok_or("缺少 refresh_token")?
             .to_string();
 
+        let oauth_client_key = token_obj.get("oauth_client_key").and_then(|v| v.as_str()).map(str::to_owned);
+
         let expires_in = token_obj["expires_in"].as_i64().ok_or("缺少 expires_in")?;
 
         let timestamp = token_obj["expiry_timestamp"]
@@ -1527,6 +1529,7 @@ impl TokenManager {
             }
             self.invalid_grant_failures.remove(&token.account_id);
             let write_path = token.account_path.clone();
+            let persisted_client_key = token.oauth_client_key.clone();
             tokio::task::spawn_blocking(move || {
                 for attempt in 1..=3 {
                     let result = (|| -> Result<(), &'static str> {
@@ -1539,6 +1542,10 @@ impl TokenManager {
                         let disk_expiry=token.get("expiry_timestamp").and_then(|v|v.as_i64()).unwrap_or(0); if disk_expiry>expiry{return Ok(());}
                         token.insert("access_token".into(),response.access_token.clone().into()); token.insert("expires_in".into(),response.expires_in.into()); token.insert("expiry_timestamp".into(),expiry.into());
                         if let Some(ref it)=response.id_token{token.insert("id_token".into(),it.clone().into());} if let Some(ref rt)=response.refresh_token{token.insert("refresh_token".into(),rt.clone().into());}
+                        match &persisted_client_key {
+                            Some(key) => { token.insert("oauth_client_key".into(), key.clone().into()); }
+                            None => { token.remove("oauth_client_key"); }
+                        }
                         crate::modules::account::atomic_write_account_json(&write_path, &value).map_err(|_| "atomic_save")
                     })();
                     match result {

@@ -12,15 +12,17 @@ while (($#)); do
   esac
   shift
 done
-python3 -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ required"'
+PYTHON="${PYTHON:-$(command -v python3 || command -v python || true)}"
+[[ -n "$PYTHON" ]] || { echo 'Python 3.11+ required' >&2; exit 2; }
+"$PYTHON" -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ required"'
 [[ -n "$SRC" && -d "$SRC" ]] || { echo 'Existing source directory required' >&2; exit 2; }
 export PYTHONPATH="$ROOT/scripts:$ROOT/configs/agt${PYTHONPATH:+:$PYTHONPATH}"
-CFG="$(python3 -c 'import sys; from platform_tools import select_config; print(select_config(sys.argv[1] or None))' "$CONFIG")"
-python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG" --dry-run
-python3 "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION" --dry-run
+CFG="$(cd "$ROOT" && "$PYTHON" -c 'import sys; sys.path.insert(0, "scripts"); from platform_tools import select_config; print(select_config(sys.argv[1] or None))' "$CONFIG")"
+"$PYTHON" "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG" --dry-run
+"$PYTHON" "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION" --dry-run
 if (( APPLY )); then
-  python3 "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION"
-  if ! python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG"; then
+  "$PYTHON" "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION"
+  if ! "$PYTHON" "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG"; then
     echo "AGT source patch has already been applied; configuration update failed." >&2
     exit 1
   fi
