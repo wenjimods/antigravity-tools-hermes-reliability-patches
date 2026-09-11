@@ -4,8 +4,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-SRC = ROOT / "patches/hermes/baseline/agent/turn_recovery.py"
-UTIL = ROOT / "patches/hermes/baseline/agent/retry_utils.py"
+SRC = ROOT / "tests/fixtures/hermes-current/turn_recovery.py"
+UTIL = ROOT / "tests/fixtures/hermes-current/retry_utils.py"
 
 def _official_compute():
     tree = ast.parse(SRC.read_text(encoding="utf-8"))

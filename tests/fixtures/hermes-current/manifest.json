@@ -1,0 +1,8 @@
+{
+  "commit": "5d2d5e906d62e326e600855277403b8595325b38",
+  "source": "https://github.com/NousResearch/hermes-agent",
+  "sha256": {
+    "turn_recovery.py": "29af79d8791850def27d0953c9913e8ea255605c8394ba52da561291eabf600d",
+    "retry_utils.py": "1682967734b3c6e68ea1f0fef91da81508c5e5c7a67659ac64dbaec0b4bf9bc9"
+  }
+}
