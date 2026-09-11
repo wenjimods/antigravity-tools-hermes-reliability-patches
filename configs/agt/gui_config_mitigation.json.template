@@ -1,0 +1,9 @@
+{
+  "auto_refresh": true,
+  "refresh_interval": 2,
+  "scheduling_mode": "balance",
+  "proxy": {
+    "port": 8045,
+    "allow_lan": false
+  }
+}

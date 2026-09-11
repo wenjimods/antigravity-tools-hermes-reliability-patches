@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C / Rust build outputs
+target/
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Logs and databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets and local configurations
+.env
+.env.*
+!.env.example
+!.env.template
+gui_config.json
+accounts/
+backups/
+rollbacks/
+*.key
+*.pem
+*.pfx
+*.crt
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# OS files
+.DS_Store
+Thumbs.db

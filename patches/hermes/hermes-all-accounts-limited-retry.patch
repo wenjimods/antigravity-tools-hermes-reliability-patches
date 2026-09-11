@@ -1,0 +1,101 @@
+--- a/agent/error_classifier.py
++++ b/agent/error_classifier.py
+@@ -122,6 +122,10 @@
+ # Server busy, credential fine: back off on the same key, never rotate. Z.AI/
+ # Zhipu reuse HTTP 429 for this, so the 429 path checks these first. Kept narrow
+ # so a plain "you have been rate-limited" doesn't land here. (#14038, #15297)
++_UPSTREAM_ACCOUNT_LIMITED_PATTERNS = (
++    "all accounts limited", "all accounts rate-limited", "all accounts failed",
++)
++
+ _OVERLOADED_PATTERNS = (
+     "overloaded", "temporarily overloaded", "service is temporarily overloaded",
+     "service may be temporarily overloaded", "server is overloaded", "server overloaded",
+@@ -404,6 +408,7 @@
+ # instead of rotating; policy block before model_not_found; timeout/connection
+ # wording last, classified as transport (never compression).
+ _MESSAGE_TAIL_RULES = (
++    (_UPSTREAM_ACCOUNT_LIMITED_PATTERNS, lambda msg: _v(_R.upstream_rate_limit, should_fallback=False, error_context=_extract_upstream_wait_context(msg))),
+     (_OVERLOADED_PATTERNS, _V_OVERLOADED), (_BILLING_PATTERNS, _billing_hints),
+     (_RATE_LIMIT_PATTERNS, _V_RATE_LIMIT), (_EMPTY_PROVIDER_RESPONSE_PATTERNS, _V_SERVER_ERROR),
+     (_CONTEXT_OVERFLOW_PATTERNS, _V_CONTEXT_OVERFLOW), (_AUTH_PATTERNS, _V_AUTH_ROTATE),
+@@ -733,7 +738,11 @@
+     400: _classify_400, 401: lambda c: _V_AUTH_ROTATE, 402: lambda c: _classify_402(c.msg, dict),
+     403: _status_403, 404: _status_404, 408: lambda c: _V_TIMEOUT, 413: lambda c: _V_PAYLOAD_TOO_LARGE,
+     429: _status_429, 500: _status_5xx, 502: _status_5xx,
+-    503: lambda c: _first_match(c.msg, _OVERFLOW_AS_5XX_RULES) or _V_OVERLOADED,
++    503: lambda c: _first_match(c.msg, _OVERFLOW_AS_5XX_RULES) or (
++        _v(_R.upstream_rate_limit, should_fallback=False, error_context=_extract_upstream_wait_context(c.msg))
++        if any(p in c.msg for p in _UPSTREAM_ACCOUNT_LIMITED_PATTERNS)
++        else _V_OVERLOADED
++    ),
+     529: lambda c: _first_match(c.msg, _OVERFLOW_AS_5XX_RULES) or _V_OVERLOADED,
+ }
+ 
+@@ -945,6 +954,19 @@
+     return isinstance(metadata, dict) and ("raw" in metadata or "provider_name" in metadata)
+ 
+ 
++def _extract_upstream_wait_context(error_msg: str) -> Dict[str, Any]:
++    """Extract upstream rate limit wait context (e.g. from AGT 8045 responses)."""
++    import re
++    match = re.search(r'(?:wait|resets?\s+in|retry\s+after)\s+(\d+(?:\.\d+)?)\s*s(?:econds?)?', error_msg, re.IGNORECASE)
++    ctx: Dict[str, Any] = {"upstream_provider": "agt"}
++    if match:
++        try:
++            ctx["wait_seconds"] = float(match.group(1))
++        except (TypeError, ValueError):
++            pass
++    return ctx
++
++
+ def _extract_upstream_provider_name(body: Any) -> Optional[str]:
+     """Pull the upstream provider name out of OpenRouter's error metadata."""
+     metadata = _error_obj(body).get("metadata")
+--- a/agent/retry_utils.py
++++ b/agent/retry_utils.py
+@@ -85,6 +85,21 @@
+     return " ".join(str(part) for part in parts if part is not None).lower()
+ 
+ 
++def parse_upstream_wait_seconds(error_or_text: Any) -> Optional[float]:
++    """Parse wait duration from upstream rate limit messages like 'All accounts limited. Wait 12s.'"""
++    if error_or_text is None:
++        return None
++    import re
++    text = _error_text(error_or_text) if not isinstance(error_or_text, str) else error_or_text.lower()
++    match = re.search(r'(?:wait|resets?\s+in|retry\s+after)\s+(\d+(?:\.\d+)?)\s*s(?:econds?)?', text, re.IGNORECASE)
++    if match:
++        try:
++            return max(0.0, float(match.group(1)))
++        except (TypeError, ValueError):
++            pass
++    return None
++
++
+ def is_zai_coding_overload_error(*, base_url: str | None, model: str | None, error: Any) -> bool:
+     """True only for the narrow Z.AI Coding Plan overload shape (429 + code
+     1305 / "temporarily overloaded"), so ordinary quota 429s still fail fast."""
+--- a/agent/turn_recovery.py
++++ b/agent/turn_recovery.py
+@@ -981,7 +981,7 @@
+     buffered; long Z.AI Coding waits surface immediately."""
+     # Imported lazily so tests that patch ``agent.retry_utils.jittered_backoff`` /
+     # ``adaptive_rate_limit_backoff`` (incl. the run_agent conftest fast-backoff fixture) intercept.
+-    from agent.retry_utils import adaptive_rate_limit_backoff, jittered_backoff, parse_retry_after_seconds
++    from agent.retry_utils import adaptive_rate_limit_backoff, jittered_backoff, parse_retry_after_seconds, parse_upstream_wait_seconds
+ 
+     # Respect Retry-After on every retryable provider error, not just 429s. Retryable
+     # 5xx responses (e.g. Cloudflare 520/524) also carry the header or a structured
+@@ -1008,6 +1008,11 @@
+             # past, which the parser clamps to 0.0) carries no usable wait —
+             # treat it as absent so we never hot-loop the provider.
+             _retry_after = None
++    # AGT upstream account pool rate limit ('all accounts limited. wait Ns') -> wait N+1 seconds
++    _upstream_wait = parse_upstream_wait_seconds(api_error)
++    if _upstream_wait is not None and ('all accounts limited' in str(api_error).lower() or getattr(classified, 'reason', None) == FailoverReason.upstream_rate_limit):
++        _retry_after = min(_upstream_wait + 1.0, 600.0)
++
+     wait_time = _retry_after if _retry_after is not None else jittered_backoff(retry_count, base_delay=2.0, max_delay=60.0)
+     _backoff_policy = None
+     _adaptive = is_rate_limited or is_zai_coding_overload
