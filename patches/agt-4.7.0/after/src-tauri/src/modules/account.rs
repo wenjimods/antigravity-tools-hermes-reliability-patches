@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_json::Value;
 use serde_json;
 use std::collections::HashMap;
 use std::fs;
@@ -909,6 +910,17 @@ pub(crate) fn save_account_at_path(account_path: &PathBuf, account: &Account) ->
     }
 
     Ok(())
+}
+
+/// Atomically persist JSON without deserializing into Account.
+pub(crate) fn atomic_write_account_json(account_path: &PathBuf, value: &Value) -> Result<(), String> {
+ let account_id=account_path.file_stem().and_then(|s|s.to_str()).ok_or_else(||"invalid_account_path".to_string())?;
+ let lock=get_account_lock(account_id); let _guard=lock.lock().map_err(|_|"account_lock_poisoned".to_string())?;
+ let parent_dir=account_path.parent().ok_or_else(||"invalid_account_path".to_string())?;
+ let temp_path=parent_dir.join(format!(".{}.tmp.{}",account_id,Uuid::new_v4()));
+ let content=serde_json::to_string_pretty(value).map_err(|e|format!("failed_to_serialize_account_json: {}",e))?;
+ if let Err(e)=fs::write(&temp_path,content){let _=fs::remove_file(&temp_path);return Err(format!("failed_to_write_temp_account_file: {}",e));}
+ if let Err(e)=atomic_replace_file(&temp_path,account_path){let _=fs::remove_file(&temp_path);return Err(format!("failed_to_replace_account_file: {}",e));} Ok(())
 }
 
 /// Save account data (thread-safe and atomic)

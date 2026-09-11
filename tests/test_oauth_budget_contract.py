@@ -7,7 +7,9 @@ Levels:
 """
 import hashlib
 import json
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,21 +73,21 @@ def test_same_source_rust_budget_helper_executes():
     """SAME_SOURCE_HELPER: no Python reimplementation of timeout semantics."""
     source = SOURCE.read_text(encoding="utf-8")
     extracted = "\n\n".join(_extract_function(source, sig) for sig in ["fn is_client_mismatch_error", "pub async fn refresh_access_token_with_client"])
-    (FIXTURE / "harness/src/official_flow.rs").write_text(extracted, encoding="utf-8")
-    result = subprocess.run(
-        [
-            "cargo",
-            "test",
-            "--manifest-path",
-            str(FIXTURE / "harness" / "Cargo.toml"),
-            "--",
-            "--nocapture",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=180,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="oauth-budget-") as tmp:
+        temp_root = Path(tmp)
+        temp_harness = temp_root / "harness"
+        shutil.copytree(FIXTURE / "harness", temp_harness, ignore=shutil.ignore_patterns("target"))
+        # Keep all relative module references valid, but never write the tracked fixture.
+        shutil.copy2(ROOT / "patches/agt-4.7.0/refresh_budget.rs", temp_root / "refresh_budget.rs")
+        lib = temp_harness / "src/lib.rs"
+        lib_text = lib.read_text(encoding="utf-8")
+        lib.write_text(lib_text.replace(
+            '#[path="../../../../../patches/agt-4.7.0/refresh_budget.rs"]',
+            '#[path="../../refresh_budget.rs"]'), encoding="utf-8")
+        (temp_harness / "src/official_flow.rs").write_text(extracted, encoding="utf-8")
+        result = subprocess.run(
+            ["cargo", "test", "--manifest-path", str(temp_harness / "Cargo.toml"), "--", "--nocapture"],
+            cwd=temp_root, capture_output=True, text=True, timeout=180, check=False,
+        )
     assert result.returncode == 0, result.stdout + "\n" + result.stderr
     assert "test result: ok" in (result.stdout + result.stderr)

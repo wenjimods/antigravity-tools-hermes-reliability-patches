@@ -1521,19 +1521,13 @@ impl TokenManager {
                         // Same lock order as upstream upsert_account: global, then account save.
                         let _lk = crate::modules::account::lock_account_file_updates()
                             .map_err(|_| "lock")?;
-                        let mut account = crate::modules::account::load_account_at_path(&write_path)
-                            .map_err(|_| "read_or_parse")?;
-                        if account.token.expiry_timestamp > expiry {
-                            tracing::warn!("Token persistence skipped a newer disk token");
-                            return Ok(());
-                        }
-                        account.token.access_token = response.access_token.clone();
-                        account.token.expires_in = response.expires_in;
-                        account.token.expiry_timestamp = expiry;
-                        if let Some(ref it) = response.id_token { account.token.id_token = Some(it.clone()); }
-                        if let Some(ref rt) = response.refresh_token { account.token.refresh_token = rt.clone(); }
-                        crate::modules::account::save_account_at_path(&write_path, &account)
-                            .map_err(|_| "atomic_save")
+                        let raw = std::fs::read_to_string(&write_path).map_err(|_| "read_or_parse")?;
+                        let mut value: serde_json::Value = serde_json::from_str(&raw).map_err(|_| "read_or_parse")?;
+                        let token = value.get_mut("token").and_then(|v|v.as_object_mut()).ok_or("read_or_parse")?;
+                        let disk_expiry=token.get("expiry_timestamp").and_then(|v|v.as_i64()).unwrap_or(0); if disk_expiry>expiry{return Ok(());}
+                        token.insert("access_token".into(),response.access_token.clone().into()); token.insert("expires_in".into(),response.expires_in.into()); token.insert("expiry_timestamp".into(),expiry.into());
+                        if let Some(ref it)=response.id_token{token.insert("id_token".into(),it.clone().into());} if let Some(ref rt)=response.refresh_token{token.insert("refresh_token".into(),rt.clone().into());}
+                        crate::modules::account::atomic_write_account_json(&write_path, &value).map_err(|_| "atomic_save")
                     })();
                     match result {
                         Ok(()) => return,

@@ -1,6 +1,7 @@
 """Offline acceptance entry point; never contacts or changes a live service."""
 from pathlib import Path
 import ast
+import hashlib
 import json
 import re
 import shutil
@@ -13,6 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def run(args):
     print('+', ' '.join(map(str, args)), flush=True)
     subprocess.run(list(map(str, args)), cwd=ROOT, check=True, stdin=subprocess.DEVNULL)
+
+
+def tracked_state():
+    names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+    state = {}
+    for name in names:
+        if name:
+            path = ROOT / name
+            state[name] = (path.exists(), hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
+    return state
 
 
 def scan():
@@ -56,23 +67,27 @@ def scan():
 
 
 def main():
-    scan()
-    run([sys.executable, '-m', 'pytest', '-q', 'tests'])
-    run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'])
-    from platform_tools import candidate_bash_paths
-    candidates = candidate_bash_paths()
-    bash = str(candidates[0]) if candidates else None
-    if not bash:
-        raise SystemExit('bash required for shell syntax acceptance')
-    for script in sorted((ROOT / 'scripts').glob('*.sh')):
-        run([bash, '-n', script])
-    for harness in sorted((ROOT / 'patches').glob('agt-*/harness/Cargo.toml')):
-        if shutil.which('cargo') is None:
-            raise SystemExit('cargo required by harness manifest')
-        if harness.exists():
+    before = tracked_state()
+    try:
+        scan()
+        run([sys.executable, '-m', 'pytest', '-q', 'tests'])
+        run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'])
+        from platform_tools import candidate_bash_paths
+        candidates = candidate_bash_paths()
+        bash = str(candidates[0]) if candidates else None
+        if not bash: raise SystemExit('bash required for shell syntax acceptance')
+        for script in sorted((ROOT / 'scripts').glob('*.sh')): run([bash, '-n', script])
+        for harness in sorted((ROOT / 'patches').glob('agt-*/harness/Cargo.toml')):
+            if shutil.which('cargo') is None: raise SystemExit('cargo required by harness manifest')
             try: run(['cargo', 'fetch', '--manifest-path', harness])
             except subprocess.CalledProcessError as exc: raise SystemExit('cargo fetch failed; offline harness not run') from exc
             run(['cargo', 'test', '--offline', '--manifest-path', harness])
+    finally:
+        after = tracked_state()
+        if before != after:
+            added = sorted(set(after) - set(before)); removed = sorted(set(before) - set(after))
+            changed = sorted(k for k in set(before) & set(after) if before[k] != after[k])
+            raise SystemExit(f'tracked files changed (no auto-restore): added={added}, removed={removed}, changed={changed}')
     print('Offline checks: PASS. This does NOT prove macOS build or live API operation.')
 
 

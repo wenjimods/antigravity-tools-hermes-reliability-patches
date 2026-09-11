@@ -1,4 +1,4 @@
-# AGT v4.7.0 OAuth 15-second budget evidence
+# AGT v4.7.0 OAuth budget evidence
 
 ## Scope and source
 
@@ -17,6 +17,9 @@ The pinned source shows:
   `invalid_grant` waits 500 ms and performs the second confirmation attempt.
 - A successful later attempt reports fallback recovery; a final failure is
   returned rather than being treated as a successful old token.
+- The standard client lookup is given a 60 s upstream/request budget in both
+  the fixture's no-account and account paths; the layered pool acquisition
+  cap is 40 s, and the per-account refresh deadline is 15 s.
 
 ## Test levels
 
@@ -25,8 +28,8 @@ The pinned source shows:
 1. **SOURCE** — hashes and inspects exact control-flow snippets from the pinned
    official source fixture. This is source evidence, not a network simulation.
 2. **OFFICIAL-FALLBACK-HARNESS** — Python extracts the two named functions from
-   this fixture exactly, while the fixture Cargo harness links the same
-   `refresh_budget.rs` source. Only the single HTTP request, client configuration,
+   this fixture exactly into a temporary copy of the complete harness, while
+   that harness links the actual `refresh_budget.rs` source. Only the single HTTP request, client configuration,
    logger, and HTTP status-code type boundaries are mocked; every synthetic response is explicitly a mock.
    Paused Tokio time covers fast fallback success, 15 s truncation, confirmation
    crossing 15 s, cancellation, and the 40 s acquisition cap.
@@ -44,10 +47,14 @@ python -m pytest tests/test_oauth_budget_contract.py -q
 The test invokes `cargo test` for the same Rust helper. No existing patch, Rust
 helper, or time constant is changed by this regression addition.
 
-## 15-second boundary
+## Budget layers and boundary
 
-The 15 s value is the per-refresh timeout and is applied before a complete
-refresh/fallback sequence can wait for the 40 s acquisition ceiling. A slow
-complete refresh is therefore truncated at 15 s first; it must not be described
-as waiting 40 s. The 40 s value remains the outer acquisition cap. All HTTP
-responses in this harness are synthetic mocks; live OAuth remains unverified.
+The 40 s value is the layered-pool acquisition ceiling. The 15 s value is the
+per-account refresh deadline, applied before a complete refresh/fallback
+sequence can consume the pool ceiling. The standard-client lookup and upstream
+request budget are 60 s in the official fixture; they are evidence of the
+client/request layer, not a promise that a refresh can run for 60 s. A first
+`invalid_grant` gets a 500 ms wait and exactly one second confirmation attempt.
+The shared-account deadline is a coordination boundary, not an additional
+guarantee beyond the per-account budget. All HTTP responses in this harness are
+synthetic mocks; live OAuth remains unverified.

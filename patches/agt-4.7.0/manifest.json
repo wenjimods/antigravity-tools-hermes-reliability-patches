@@ -5,21 +5,21 @@
   "files": {
     "src-tauri/src/modules/account.rs": {
       "before": "858ac15610fe93cfa7e9ad2e6bec51e2c42a1807012f76de836be1b64f98dc66",
-      "after": "d93893e75fdbc39352e49ee4e49e48de33f2eec9bcfa1b592cd6db357382bf9f"
+      "after": "00cd7ae2d71080c05ab6bdd2ff0ce2579d9aa356c008ac7f3b9834149ac67aef"
     },
     "src-tauri/src/proxy/token_manager.rs": {
       "before": "40c1e4607027b7da9085e233de28c5a3338ff416736ac31e7d20d8dea393780a",
-      "after": "ad194235b3bd3e88a8af93c355673048e8a3e355743d27a45434c78fdb00147f"
+      "after": "6b95202c29aa93c467c166e6bde15742e727ce7c85bf25f7ad93362d7e82a3aa"
     },
     "src-tauri/src/proxy/mod.rs": {
       "before": "ae0b73c9a66a739425a4746e180831bb702c6767a038a0f8af4e5e073fe0d52e",
       "after": "d5bb48ebb9a3a4b95719ef309446bf89d0fba97b019104a25d9cfba511882a94"
     },
     "src-tauri/src/proxy/refresh_budget.rs": {
-      "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "before": null,
       "after": "98bcf4d6bd61e88ae4acf88fd2f9884c8a6591c5effbc46fd6a963a8bc4eeee7"
     }
   },
   "patch": "agt-v470.patch",
-  "patch_sha256": "13be8ab0ff1bd382b9df1ce16f2536d4a3e5c053177745043de48776b2c5983b"
+  "patch_sha256": "4be51475754148db6efce0a0a1ca14dee6107d61f44d56e6e215d3de1927ccc9"
 }

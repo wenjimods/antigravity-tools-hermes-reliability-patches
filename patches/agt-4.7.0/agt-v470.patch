@@ -1,6 +1,12 @@
 --- a/src-tauri/src/modules/account.rs
 +++ b/src-tauri/src/modules/account.rs
-@@ -720,7 +720,7 @@
+@@ -1,4 +1,5 @@
+ use serde::Serialize;
++use serde_json::Value;
+ use serde_json;
+ use std::collections::HashMap;
+ use std::fs;
+@@ -720,7 +721,7 @@
  }
  
  /// Load account from a specific path with self-healing support for trailing characters/corrupted suffixes
@@ -9,7 +15,7 @@
      let content = fs::read_to_string(account_path)
          .map_err(|e| format!("failed_to_read_account_data: {}", e))?;
  
-@@ -883,7 +883,7 @@
+@@ -883,7 +884,7 @@
  }
  
  /// Save account data at specific file path (thread-safe and atomic)
@@ -18,9 +24,27 @@
      let _lock = get_account_lock(&account.id);
      let _guard = _lock.lock().unwrap();
  
+@@ -909,6 +910,17 @@
+     }
+ 
+     Ok(())
++}
++
++/// Atomically persist JSON without deserializing into Account.
++pub(crate) fn atomic_write_account_json(account_path: &PathBuf, value: &Value) -> Result<(), String> {
++ let account_id=account_path.file_stem().and_then(|s|s.to_str()).ok_or_else(||"invalid_account_path".to_string())?;
++ let lock=get_account_lock(account_id); let _guard=lock.lock().map_err(|_|"account_lock_poisoned".to_string())?;
++ let parent_dir=account_path.parent().ok_or_else(||"invalid_account_path".to_string())?;
++ let temp_path=parent_dir.join(format!(".{}.tmp.{}",account_id,Uuid::new_v4()));
++ let content=serde_json::to_string_pretty(value).map_err(|e|format!("failed_to_serialize_account_json: {}",e))?;
++ if let Err(e)=fs::write(&temp_path,content){let _=fs::remove_file(&temp_path);return Err(format!("failed_to_write_temp_account_file: {}",e));}
++ if let Err(e)=atomic_replace_file(&temp_path,account_path){let _=fs::remove_file(&temp_path);return Err(format!("failed_to_replace_account_file: {}",e));} Ok(())
+ }
+ 
+ /// Save account data (thread-safe and atomic)
 --- a/src-tauri/src/proxy/token_manager.rs
 +++ b/src-tauri/src/proxy/token_manager.rs
-@@ -1471,6 +1471,83 @@
+@@ -1471,6 +1471,77 @@
          }
      }
  
@@ -74,19 +98,13 @@
 +                        // Same lock order as upstream upsert_account: global, then account save.
 +                        let _lk = crate::modules::account::lock_account_file_updates()
 +                            .map_err(|_| "lock")?;
-+                        let mut account = crate::modules::account::load_account_at_path(&write_path)
-+                            .map_err(|_| "read_or_parse")?;
-+                        if account.token.expiry_timestamp > expiry {
-+                            tracing::warn!("Token persistence skipped a newer disk token");
-+                            return Ok(());
-+                        }
-+                        account.token.access_token = response.access_token.clone();
-+                        account.token.expires_in = response.expires_in;
-+                        account.token.expiry_timestamp = expiry;
-+                        if let Some(ref it) = response.id_token { account.token.id_token = Some(it.clone()); }
-+                        if let Some(ref rt) = response.refresh_token { account.token.refresh_token = rt.clone(); }
-+                        crate::modules::account::save_account_at_path(&write_path, &account)
-+                            .map_err(|_| "atomic_save")
++                        let raw = std::fs::read_to_string(&write_path).map_err(|_| "read_or_parse")?;
++                        let mut value: serde_json::Value = serde_json::from_str(&raw).map_err(|_| "read_or_parse")?;
++                        let token = value.get_mut("token").and_then(|v|v.as_object_mut()).ok_or("read_or_parse")?;
++                        let disk_expiry=token.get("expiry_timestamp").and_then(|v|v.as_i64()).unwrap_or(0); if disk_expiry>expiry{return Ok(());}
++                        token.insert("access_token".into(),response.access_token.clone().into()); token.insert("expires_in".into(),response.expires_in.into()); token.insert("expiry_timestamp".into(),expiry.into());
++                        if let Some(ref it)=response.id_token{token.insert("id_token".into(),it.clone().into());} if let Some(ref rt)=response.refresh_token{token.insert("refresh_token".into(),rt.clone().into());}
++                        crate::modules::account::atomic_write_account_json(&write_path, &value).map_err(|_| "atomic_save")
 +                    })();
 +                    match result {
 +                        Ok(()) => return,
@@ -104,7 +122,7 @@
      async fn get_token_filtered(
          &self,
          quota_group: &str,
-@@ -1503,7 +1580,7 @@
+@@ -1503,7 +1574,7 @@
          }
  
          // 【优化 Issue #284】添加 5 秒超时，防止死锁
@@ -113,7 +131,7 @@
          match tokio::time::timeout(
              timeout_duration,
              self.get_token_internal(
-@@ -1518,7 +1595,7 @@
+@@ -1518,7 +1589,7 @@
          {
              Ok(result) => result,
              Err(_) => Err(
@@ -122,7 +140,7 @@
              ),
          }
      }
-@@ -1659,6 +1736,8 @@
+@@ -1659,6 +1730,8 @@
              .map(|cfg| cfg.quota_protection.enabled)
              .unwrap_or(false);
  
@@ -131,7 +149,7 @@
          // ===== [FIX #820] 固定账号模式：优先使用指定账号 =====
          let preferred_id = self.preferred_account_id.read().await.clone();
          if let Some(ref pref_id) = preferred_id {
-@@ -1726,89 +1805,10 @@
+@@ -1726,89 +1799,10 @@
                              // 直接使用优先账号，跳过轮询逻辑
                              let mut token = preferred_token.clone();
  
@@ -225,7 +243,7 @@
                              }
  
                              // 确保有 project_id (filter empty strings to trigger re-fetch)
-@@ -1873,6 +1873,7 @@
+@@ -1873,6 +1867,7 @@
                  tracing::warn!("🔒 [FIX #820] Preferred account {} not found in pool, falling back to round-robin", pref_id);
              }
          }
@@ -233,7 +251,7 @@
          // ===== [END FIX #820] =====
  
          // 【优化 Issue #284】将锁操作移到循环外，避免重复获取锁
-@@ -1885,6 +1886,7 @@
+@@ -1885,6 +1880,7 @@
          };
  
          let mut attempted: HashSet<String> = HashSet::new();
@@ -241,7 +259,7 @@
          let mut last_error: Option<String> = None;
          let mut need_update_last_used: Option<(String, std::time::Instant)> = None;
  
-@@ -2181,79 +2183,10 @@
+@@ -2181,79 +2177,10 @@
                  OnDiskAccountState::Enabled => {}
              }
  
@@ -325,7 +343,7 @@
                                  let is_grant_error =
                                      e.contains("\"invalid_grant\"") || e.contains("invalid_grant");
                                  if is_grant_error {
-@@ -2272,7 +2205,7 @@
+@@ -2272,7 +2199,7 @@
                                          let _ = self
                                              .disable_account(
                                                  &token.account_id,
@@ -334,7 +352,7 @@
                                              )
                                              .await;
                                          self.invalid_grant_failures.remove(&token.account_id);
-@@ -2284,7 +2217,7 @@
+@@ -2284,7 +2211,7 @@
                                          );
                                      }
                                  }
@@ -343,7 +361,7 @@
                                  attempted.insert(token.account_id.clone());
                                  if quota_group != "image_gen"
                                      && matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
-@@ -2293,11 +2226,7 @@
+@@ -2293,11 +2220,7 @@
                                          Some((String::new(), std::time::Instant::now()));
                                  }
                                  continue;
@@ -364,7 +382,7 @@
  pub mod adapters;
 +
 +pub(crate) mod refresh_budget;
---- a/src-tauri/src/proxy/refresh_budget.rs
+--- /dev/null
 +++ b/src-tauri/src/proxy/refresh_budget.rs
 @@ -0,0 +1,157 @@
 +//! Independent account-refresh limits; the acquisition guard is only a final safety net.

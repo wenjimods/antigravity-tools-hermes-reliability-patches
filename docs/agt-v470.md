@@ -1,9 +1,11 @@
 # AGT v4.7.0 候选补丁
 
-固定官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`。baseline/ 为真实相关原始文件，after/ 为应用后文件；manifest.json记录LF归一化 before/after SHA与patch SHA。
+固定官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`。baseline 仅包含官方真实存在的相关文件；`src-tauri/src/proxy/refresh_budget.rs` 在官方不存在，manifest 的 before 为 null，patch 使用 `/dev/null` 新增语义。rollback 必须删除该新增文件。仓库补丁根目录的 `refresh_budget.rs` 是同源测试 helper，不属于官方 baseline，保留供 harness 使用。
 
-40s acquisition guard、1s lock、15s refresh；preferred刷新失败退出专用label并排除该账号，main保留invalid_grant>=2停用规则。OAuth函数不修改。锁后读取新token，成功更新内存包括rotated refresh_token，再后台写盘；读/解析/写盘失败最多3次并warning，无凭据内容。
+保持 40s acquisition、1s lock、15s 单账号完整 OAuth fallback 链 deadline；15s 并非单次 HTTP timeout，也不是已证明最优参数。上游请求配置及二次确认共享 deadline 的分层证据见 docs/oauth-budget.md；最终参数待真实 E2E/慢网络数据决定。
 
-同源helper Rust测试覆盖预算/锁/错误/6秒真实TCP延迟；Python覆盖真实补丁apply/reverse/重复/拒绝。尚未完整AGT编译，不宣称preferred/main集成执行已被helper证明。
+持久化使用 serde_json::Value，仅修改五个 token 字段，不再进行 typed `Account` 往返，保留未知顶层及 token 字段。窄接口 `atomic_write_account_json` 复用官方每账号锁、UUID 临时文件、Windows MoveFileExW(REPLACE_EXISTING|WRITE_THROUGH) / 非 Windows rename；失败清理临时文件。保留 caller 全局锁，顺序为全局锁→每账号锁，与上游管理路径一致；不宣称全局并发串行化或所有 account writer 已统一。后台最多三次有界重试，warning 不输出凭据。
 
-持久化现在复用官方 `load_account_at_path`/`save_account_at_path`：后者仅在写入阶段持有每账号锁，并使用临时文件+Windows MoveFileExW(REPLACE_EXISTING|WRITE_THROUGH)或非Windows rename。调用方保留原有全局管理锁覆盖本路径读-改-写，锁顺序与官方 upsert_account 相同：先全局锁，再进入 save 的每账号锁；save 不重新获取全局锁。每账号锁本身仍只保护写入，与不采用全局锁的其他写入路径可能交错，因此不宣称全局并发串行化。typed `Account` 保存会按官方模型序列化，模型未知/新增字段可能被丢弃，需跟随上游模型核对。故障时保留3次重试与warning；进程崩溃或永久磁盘错误仍可能丢失rotation。expiry比较不等同完整并发generation顺序证明。真正rotation→重启必须真机测试，不能宣称已保证。当前15s包住完整OAuth调用链，慢client fallback可能被截断，但超时不得计为invalid_grant。
+本地回归执行真实提取的 JSON 修改块及 atomic helper：模拟账号数据的未知字段保留、rotation 字段更新；Windows 原生文件共享锁阻止替换时，旧文件字节保留且临时文件清理。非 Windows 故障路径仍需当地验证。补丁测试覆盖 dry-run/apply/重复操作/rollback 删除新增文件及 unknown/partial 拒绝，不降低 exact hash 检查。
+
+边界：atomic replace 不等于 refresh rotation 已完成真机重启验证；永久磁盘失败或写盘前进程退出仍可能丢失 rotation。expiry 比较不证明并发 generation 全序。完整 AGT 编译、真实 OAuth、rotation→AGT 重启、双账号切换、官方未修改 Hermes chat/SSE/503 Retry-After、跨平台真机 E2E 尚未完成。生产服务未修改，Actions 仅手动触发。
