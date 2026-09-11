@@ -1,0 +1,21 @@
+{
+  "baseline": "v4.7.0",
+  "source_commit": "85fb4fe688997d3a0c2930b7a202cf22f617b092",
+  "status": "candidate",
+  "files": {
+    "src-tauri/src/proxy/token_manager.rs": {
+      "before": "40c1e4607027b7da9085e233de28c5a3338ff416736ac31e7d20d8dea393780a",
+      "after": "4ba5b5450762f7007cdbe8bb93bb871059c96756eb2e48c337005a3779f9d307"
+    },
+    "src-tauri/src/proxy/mod.rs": {
+      "before": "ae0b73c9a66a739425a4746e180831bb702c6767a038a0f8af4e5e073fe0d52e",
+      "after": "d5bb48ebb9a3a4b95719ef309446bf89d0fba97b019104a25d9cfba511882a94"
+    },
+    "src-tauri/src/proxy/refresh_budget.rs": {
+      "before": null,
+      "after": "98bcf4d6bd61e88ae4acf88fd2f9884c8a6591c5effbc46fd6a963a8bc4eeee7"
+    }
+  },
+  "patch": "agt-v470.patch",
+  "patch_sha256": "1dfbb02f93f0063bef72eab085c28690ab30d8a41c0677ff5524583ba639c61f"
+}

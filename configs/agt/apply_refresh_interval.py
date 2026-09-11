@@ -6,9 +6,14 @@ import argparse, datetime, json, os, pathlib, shutil, sys, tempfile
 REQUIRED = {"language", "theme", "auto_refresh", "refresh_interval", "auto_sync", "sync_interval"}
 
 def get_config_path():
-    return pathlib.Path(os.environ.get("AGT_CONFIG_PATH") or pathlib.Path(os.environ.get("AGT_CONFIG_DIR", pathlib.Path.home() / ".antigravity_tools")) / "gui_config.json")
+    explicit = os.environ.get("AGT_CONFIG_PATH")
+    if explicit:
+        return pathlib.Path(explicit)
+    if os.environ.get("ABV_DATA_DIR"):
+        return pathlib.Path(os.environ["ABV_DATA_DIR"]) / "gui_config.json"
+    return pathlib.Path(os.environ.get("AGT_CONFIG_DIR", pathlib.Path.home() / ".antigravity_tools")) / "gui_config.json"
 
-def apply_mitigation(config_path, target_interval=2):
+def apply_mitigation(config_path, target_interval=2, dry_run=False):
     config_path = pathlib.Path(config_path)
     if not config_path.is_file():
         print(f"Error: existing config required: {config_path}", file=sys.stderr); return False
@@ -24,6 +29,9 @@ def apply_mitigation(config_path, target_interval=2):
         print("Error: refresh_interval must be a positive integer in minutes (unchanged)", file=sys.stderr); return False
     if isinstance(target_interval, bool) or not isinstance(target_interval, int) or target_interval < 1:
         print("Error: target interval must be a positive integer (unchanged)", file=sys.stderr); return False
+    if dry_run:
+        print("[OK] configuration validated; dry-run does not write")
+        return True
     if data["refresh_interval"] == target_interval:
         print(f"[OK] refresh_interval={target_interval} minutes; unchanged"); return True
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -44,5 +52,6 @@ def apply_mitigation(config_path, target_interval=2):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--config", type=pathlib.Path, default=get_config_path()); parser.add_argument("--interval", type=int, default=2)
-    args = parser.parse_args(); raise SystemExit(0 if apply_mitigation(args.config, args.interval) else 1)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(); raise SystemExit(0 if apply_mitigation(args.config, args.interval, args.dry_run) else 1)
 if __name__ == "__main__": main()

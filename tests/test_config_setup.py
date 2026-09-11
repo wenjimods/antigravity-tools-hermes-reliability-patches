@@ -1,6 +1,7 @@
 import json, pathlib, subprocess, sys, tempfile, unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "configs" / "agt"))
+sys.path.insert(0, str(ROOT / "scripts"))
 import apply_refresh_interval as refresh
 
 COMPLETE = {"language":"zh", "theme":"system", "auto_refresh":True, "refresh_interval":15, "auto_sync":False, "sync_interval":5}
@@ -22,6 +23,6 @@ class TestConfigSetup(unittest.TestCase):
         self.assertIn("pub refresh_interval: i32, // minutes", source); self.assertIn("refresh_interval: 15", source)
     def test_shell_syntax(self):
         for name in ("setup_macos.sh", "setup_remote.sh"):
-            r = subprocess.run(["bash", "-n", str(ROOT / "scripts" / name)], capture_output=True, text=True); self.assertEqual(r.returncode, 0, r.stderr)
+            r = subprocess.run([str(__import__("platform_tools").candidate_bash_paths()[0]), "-n", str(ROOT / "scripts" / name)], capture_output=True, text=True); self.assertEqual(r.returncode, 0, r.stderr)
 
 if __name__ == "__main__": unittest.main()
