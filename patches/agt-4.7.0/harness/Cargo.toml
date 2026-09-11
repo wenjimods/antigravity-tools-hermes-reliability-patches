@@ -1,0 +1,10 @@
+[package]
+name = "agt-refresh-budget-regression"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "../refresh_budget.rs"
+
+[dependencies]
+tokio = { version = "=1.49.0", features = ["full", "test-util"] }

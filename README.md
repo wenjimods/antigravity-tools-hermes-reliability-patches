@@ -1,45 +1,69 @@
-# Antigravity Tools 与 Hermes 可靠性修复：令牌刷新超时、失败换号与限流重试
+# Antigravity Tools 与 Hermes 可靠性修复
 
-这是**源码补丁与配置辅助包**，不是 AGT 安装器，也不是已部署的 Mac 服务。三层组件可独立使用：
+令牌刷新超时、失败换号与限流重试。**这是源码补丁与验证工具，不是万能安装器，也不是已经部署的服务。**
 
-| 组件 | 处理的问题 | 不处理的问题 |
-|---|---|---|
-| AGT v4.6.7 源码补丁 | 令牌获取总预算 40 秒、锁 1 秒、OAuth 15 秒；锁后重读；刷新失败后尝试其他账号 | 账号额度耗尽、地区限制、全部账号刷新失败 |
-| Hermes 客户端补丁 | 识别 `All accounts limited. Wait Ns`，按 `N + 1` 等待后进行有界重试 | AGT 的 OAuth 刷新超时本身 |
-| AGT 配置缓解 | 缩短后台刷新周期，降低请求路径碰到刷新窗口的概率 | 不能替代源码修复，不能保证消除所有 503 |
+## 用哪个版本
 
-## 最短使用路径
+| 组件 | 版本与状态 |
+|---|---|
+| AGT 4.7.0 | 独立候选补丁；官方 commit `85fb4fe688997d3a0c2930b7a202cf22f617b092`；真实基线 apply / dry-run / repeat / rollback 与同源 Rust helper 测试 |
+| AGT 4.6.7 | 原有补丁保留，必须显式选择对应版本 |
+| 当前官方 Hermes | 以 commit `5d2d5e906d62e326e600855277403b8595325b38` 验证原生 Retry-After；默认不打 Hermes 补丁 |
+| 旧 Hermes 补丁 | legacy compatibility，仅适用于其精确基线及缺少标准 header 的旧环境 |
 
-1. 在**隔离副本**中准备上游源码，按 `patches/agt-4.6.7/README.md`、`patches/hermes/README.md` 对齐各自基线。应用器拒绝未知/部分修改的目标；不要强制覆盖。
-2. 使用 Python 3.11+ 和 Git：
+AGT 改动：40 秒总预算、1 秒账号锁、15 秒刷新预算、锁后重读、preferred/main 失败换号；保留 v4.7 的 invalid_grant 两次确认。持久化失败记录不含凭据的 warning，并有界重试。**不保证消除所有503；未完成完整 AGT 编译或 rotation 重启真机验证。**
 
-```bash
-python scripts/apply_agt_patch.py /path/to/Antigravity-Manager
-python scripts/apply_hermes_patch.py /path/to/hermes-agent
+## 目标平台
+
+| 平台 | 定位 |
+|---|---|
+| Windows 10/11 x64 | 正式目标；本机 Windows 原生 PowerShell 路径已测试 |
+| macOS Apple Silicon | 正式目标；CI 使用 macos-14 arm64，不等于用户 Mac 真机部署 |
+| Windows ARM64 | experimental，未验原生 AGT 构建 |
+| Intel Mac | 不承诺支持 |
+
+GitHub Actions 使用 Windows Server 2022 x64 与 macOS 14 arm64；实际结果见本分支 Actions，workflow 存在不等于通过。两平台完整服务 E2E 均未完成。
+
+## 怎么补
+
+仅在隔离源码和非生产配置副本上操作。先由官方 AGT 初始化完整 gui_config.json；关闭候选应用，不自动OAuth、不复制生产账号、不切流量。
+
+Windows PowerShell（默认真实 dry-run，`-Apply` 才写）：
+
+```powershell
+.\scripts\setup_windows.ps1 -SourceDir 'D:\candidate source' -Config 'D:\candidate data\gui_config.json' -Version 4.7.0
 ```
 
-3. 补丁应用成功不等于程序已安装。AGT 须按官方构建说明在目标平台编译；Hermes 须在独立安装中验证，再考虑切换。不要向现用程序目录直接复制旧版本源码。
-4. 首次安装 AGT 时先用官方程序生成完整配置，并由用户手工完成 OAuth。关闭目标 AGT 后，参见 `configs/agt/README.md` 对**已有完整配置**执行备份和刷新周期调整。模板只是字段说明，不是完整配置文件。
-5. Hermes 接入方式见 `configs/hermes/README.md`。密钥只放目标机私有配置；不要提交账号或密钥。
-
-`scripts/setup_macos.sh` / `scripts/setup_remote.sh` 是本地预检与引导，不自动安装应用、授权账号、创建隧道或切换流量。独立备用 Mac 使用独立账号；不复制主机账号目录，不改现有 Windows 节点。
-
-## 离线验收
+macOS（默认 dry-run，`--apply` 才写）：
 
 ```bash
+bash scripts/setup_macos.sh /path/to/source --config /path/to/gui_config.json --version 4.7.0
+```
+
+只应用源码补丁：
+
+```bash
+python scripts/apply_agt_patch.py /path/to/source --version 4.7.0 --dry-run
+# 去掉 --dry-run 才实际写入
+```
+
+配置路径优先级：`--config` > `AGT_CONFIG_PATH` > `ABV_DATA_DIR/gui_config.json` > `AGT_CONFIG_DIR/gui_config.json` > 默认目录。高优先路径不存在就拒绝，不回落到其他配置。
+
+## 怎么验、怎么退
+
+```bash
+python -m pip install pytest
 python scripts/verify.py
-# 已有 Rust 工具链及本地依赖缓存时，追加真实 Rust helper 测试：
-python scripts/verify.py --rust
+python scripts/check_stack.py
+python scripts/apply_agt_patch.py /path/to/source --version 4.7.0 --rollback --dry-run
 ```
 
-入口包含源码补丁回归测试、Python/JSON 检查、Shell 语法检查和工作树/可达历史的常见密钥及个人路径模式扫描。具体真实基线与测试覆盖见各组件说明。扫描只是模式检查，不是不存在敏感内容的保证；正式推送还须审查所有文件及 Git 作者信息。
+去掉 rollback 命令的 `--dry-run` 才还原。rollback 只接受 exact-after；未知或半修改状态拒绝。配置备份留在原配置旁，含敏感内容，不提交仓库。多文件写入遇普通异常会恢复，但不承诺断电事务安全。
 
-## 交付与升级边界
+统一验收包括 Python 全套、原生 Windows 入口、shell语法、两个同源 Rust harness、文件/历史模式扫描。首次 cargo fetch 需要网络；依赖缓存后离线运行。不打印Key；doctor不发生成请求、不跟随重定向。
 
-- 本轮只验收离线工具包；**未在 Mac 上构建、未部署、未验证目标机真实 API**。这些不能用模拟测试替代。
-- 升级 AGT/Hermes 后先比较上游语义；若已修复就不要机械重打旧补丁。文件哈希不匹配时停止，不使用模糊替换兜底。
-- 正式运行验收应另测：无/错/正确 Key、非流式与流式、刷新失败换号、重启恢复。测试期间保持原服务和回滚副本不动。
-- 仓库不含账号、Token、Cookie、真实 Key、数据库、日志、二进制、内部域名及机器绝对路径。
-- GitHub 创建、推送与公开不属于这次本地修复；发布前需确认账号、可见性、Git 历史隐私及许可证。
+## 尚需真机验收
 
-上游 AGT 为 `lbjlaq/Antigravity-Manager`；Hermes 为 `NousResearch/hermes-agent`。AGT 的 **CC-BY-NC-SA 4.0 非商业限制**不可忽略；许可证与第三方归属见 `LICENSE` 和 `NOTICE.md`。
+完整 AGT 编译、真实OAuth刷新及rotation持久化、两账号失败切换、AGT→未修改Hermes恢复、chat/SSE、重启恢复与Windows/macOS真机验收仍待完成，详见 [E2E清单](docs/e2e-acceptance.md)。helper测试和本地HTTP契约不能替代这些项目。
+
+许可证：AGT 为 CC-BY-NC-SA 4.0，Hermes 为 MIT，见 NOTICE.md；非商业限制保留。本仓库保持私有，候选分支供复核，不应直接升级生产服务。

@@ -57,14 +57,22 @@ def scan():
 
 def main():
     scan()
+    run([sys.executable, '-m', 'pytest', '-q', 'tests'])
     run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'])
-    bash = shutil.which('bash')
+    from platform_tools import candidate_bash_paths
+    candidates = candidate_bash_paths()
+    bash = str(candidates[0]) if candidates else None
     if not bash:
         raise SystemExit('bash required for shell syntax acceptance')
     for script in sorted((ROOT / 'scripts').glob('*.sh')):
         run([bash, '-n', script])
-    if '--rust' in sys.argv:
-        run(['cargo', 'test', '--offline', '--manifest-path', ROOT / 'patches/agt-4.6.7/harness/Cargo.toml'])
+    for harness in sorted((ROOT / 'patches').glob('agt-*/harness/Cargo.toml')):
+        if shutil.which('cargo') is None:
+            raise SystemExit('cargo required by harness manifest')
+        if harness.exists():
+            try: run(['cargo', 'fetch', '--manifest-path', harness])
+            except subprocess.CalledProcessError as exc: raise SystemExit('cargo fetch failed; offline harness not run') from exc
+            run(['cargo', 'test', '--offline', '--manifest-path', harness])
     print('Offline checks: PASS. This does NOT prove macOS build or live API operation.')
 
 
