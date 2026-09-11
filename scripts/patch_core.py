@@ -35,6 +35,14 @@ def _manifest(assets):
         raise ValueError(f"patch group is BLOCKED: {manifest.get('blocked_reason', 'no reason supplied')}")
     if not isinstance(manifest.get("files"), dict) or not manifest.get("patch"):
         raise ValueError("patch group has no usable manifest/patch")
+    evidence = manifest.get("evidence_files", {})
+    if not isinstance(evidence, dict): raise ValueError("invalid evidence_files")
+    for name, expected in evidence.items():
+        # Evidence is a read-only gate and can never be a patch target.
+        if name in manifest["files"]: raise ValueError("evidence file is also a patch target")
+        path = _safe(Path(__file__).resolve().parents[1], name)
+        if not path.is_file() or digest(path.read_bytes()) != expected:
+            raise ValueError(f"evidence integrity mismatch: {name}")
     patch = assets / manifest["patch"]
     if digest(patch.read_bytes()) != manifest["patch_sha256"]: raise ValueError("patch integrity mismatch")
     return manifest, patch

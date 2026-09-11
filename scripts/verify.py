@@ -17,12 +17,16 @@ def run(args):
 
 
 def tracked_state():
-    names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+    cached = [n for n in subprocess.check_output(['git', 'ls-files', '--cached', '-z'], cwd=ROOT).decode().split('\0') if n]
+    others = [n for n in subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().split('\0') if n]
     state = {}
-    for name in names:
-        if name:
+    for kind, names in (("tracked", cached), ("untracked", others)):
+        for name in names:
             path = ROOT / name
-            state[name] = (path.exists(), hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
+            state[(kind, name)] = (path.exists(), hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
+    # Retain tracked paths that disappeared from the worktree.
+    for name in [n for n in subprocess.check_output(['git','ls-files','-z'], cwd=ROOT).decode().split('\0') if n]:
+        state.setdefault(("tracked", name), (False, None))
     return state
 
 

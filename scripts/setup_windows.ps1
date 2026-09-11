@@ -40,6 +40,6 @@ try {
         & $python "$root\scripts\apply_agt_patch.py" $SourceDir --version $Version
         if ($LASTEXITCODE -ne 0) { throw 'AGT patch failed; configuration was not changed' }
         & $python "$root\configs\agt\apply_refresh_interval.py" --config $cfg
-        if ($LASTEXITCODE -ne 0) { throw 'configuration update failed' }
+        if ($LASTEXITCODE -ne 0) { throw 'AGT source patch has already been applied; configuration update failed.' }
     }
 } catch { Write-Error $_; exit 1 }

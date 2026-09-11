@@ -54,7 +54,7 @@ per-account refresh deadline, applied before a complete refresh/fallback
 sequence can consume the pool ceiling. The standard-client lookup and upstream
 request budget are 60 s in the official fixture; they are evidence of the
 client/request layer, not a promise that a refresh can run for 60 s. A first
-`invalid_grant` gets a 500 ms wait and exactly one second confirmation attempt.
+A first `invalid_grant` gets a 500 ms wait, then exactly one confirmation request using the shared remaining 15 s deadline (not a separate 1 s timeout).
 The shared-account deadline is a coordination boundary, not an additional
 guarantee beyond the per-account budget. All HTTP responses in this harness are
 synthetic mocks; live OAuth remains unverified.

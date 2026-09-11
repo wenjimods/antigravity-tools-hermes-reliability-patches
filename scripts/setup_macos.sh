@@ -20,5 +20,8 @@ python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG" --dry-run
 python3 "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION" --dry-run
 if (( APPLY )); then
   python3 "$ROOT/scripts/apply_agt_patch.py" "$SRC" --version "$VERSION"
-  python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG"
+  if ! python3 "$ROOT/configs/agt/apply_refresh_interval.py" --config "$CFG"; then
+    echo "AGT source patch has already been applied; configuration update failed." >&2
+    exit 1
+  fi
 fi
